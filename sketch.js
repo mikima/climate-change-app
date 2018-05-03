@@ -7,7 +7,7 @@ const key = 'pk.eyJ1IjoibWlraW1hIiwiYSI6IjNvWUMwaUEifQ.Za_-O03W3UdQxZwS3bLxtg';
 const options = {
 	lat: 43.456366,
 	lng: 11.787152,
-	zoom: 5,
+	zoom: 5.5,
 	style: 'mapbox://styles/mikima/cjfy1ltb45xo32spj8vpry2y3',
 	pitch: 0,
 };
@@ -26,11 +26,14 @@ let fullData, province;
 var show_TX30 = true;
 var show_PRCPTOT = true;
 var show_PR95PERC = false;
+//lens variables
 var show_lens = false;
 var lens_size = 100;
 
-// single layers
-var l1, l2, l3
+
+
+//
+var polygons;
 
 //max values, pre-calculated
 var maxValues = {
@@ -45,14 +48,15 @@ function preload() {
 }
 
 function setup() {
-	w = 1920;
-	h = 1080;
+	w = 960;
+	h = 960;
 	canvas = createCanvas(w,h);
 	// Create a tile map and overlay the canvas on top.
 	myMap = mappa.tileMap(options);
 	myMap.overlay(canvas);
 	//add function to map zoom
-	myMap.onChange(updateLayers);
+	myMap.onChange(initMap);
+	
 }
 
 // The draw loop is fully functional but we are not using it for now.
@@ -60,12 +64,37 @@ function draw() {
 	//drawDancingPoints()
 }
 
+// single layers
+var l1, l2, l3,
+	l1_45, l2_45, l3_45 
+
+// crop areas
+var croparea, cropinverse;
+
+
+function initMap() {
+	//render all the layers
+	l1 = singleLayer('2071-2100', 'TX30', 'RCP85', '#ff0086');
+	l2 = singleLayer('2071-2100', 'PR95PERC', 'RCP85', '#f9ff00');
+	l3 = singleLayer('2071-2100', 'PRCPTOT', 'RCP85', '#00fff8');
+	l1_45 = singleLayer('2071-2100', 'TX30', 'RCP45', '#ff0086');
+	l2_45 = singleLayer('2071-2100', 'PR95PERC', 'RCP45', '#f9ff00');
+	l3_45 = singleLayer('2071-2100', 'PRCPTOT', 'RCP45', '#00fff8');
+	polygons = renderFeatures(province);
+	//
+	croparea = createGraphics(w,h);
+	//croparea.id('croparea')
+	cropinverse = createGraphics(w,h);
+	//cropinverse.id('cropinverse')
+	//update
+	updateLayers()
+}
+
 function updateLayers() {
 	clear();
 	blendMode(MULTIPLY);
 
 	//calculate the crop area
-	var croparea = createGraphics(windowWidth, windowHeight);
 	croparea.pixelDensity(1);
 	croparea.background(255);
 	croparea.fill(0);
@@ -74,39 +103,35 @@ function updateLayers() {
 	croparea.ellipse(mouseX, mouseY, lens_size);
 
 	//image(croparea,0,0);
-
+	cropinverse.pixelDensity(1);
+	cropinverse.background(0);
+	cropinverse.fill(255);
+	cropinverse.noStroke();
+	cropinverse.ellipseMode(CENTER);
+	cropinverse.ellipse(mouseX, mouseY, lens_size);
 
 	if (show_TX30) {
-		l1 = singleLayer('2071-2100', 'TX30', 'RCP85', '#ff0086');
-		console.log(l1)
-		var masked = pgMask(l1,croparea);
-		image(masked, 0, 0,w,h);
+		image(pgMask(l1,croparea), 0, 0);
+		image(pgMask(l1_45,cropinverse),0,0);
 	}
 
 	if (show_PR95PERC) {
-		l2 = singleLayer('2071-2100', 'PR95PERC', 'RCP85', '#f9ff00');
-
-		var masked = pgMask(l2,croparea);
-		image(masked, 0, 0,w,h);
+		image(pgMask(l2,croparea), 0, 0);
+		image(pgMask(l2_45,cropinverse),0,0);
 	}
 
 	if (show_PRCPTOT) {
-		l3 = singleLayer('2071-2100', 'PRCPTOT', 'RCP85', '#00fff8');
-
-		var masked = pgMask(l3,croparea);
-		image(masked, 0, 0,w,h);
+		image(pgMask(l3,croparea), 0, 0,w,h);
+		image(pgMask(l3_45,cropinverse),0,0);
 	}
 
-	image(renderProvinces(),0,0,w,h);
+	//image(pgMask(renderProvinces(),cropinverse),0,0,w,h);
+	image(pgMask(renderPolygons(polygons),cropinverse),0,0)
+
 }
 
 function mouseMoved() {
 	updateLayers();
-}
-
-function mouseClicked() {
-	updateLayers()
-	show_lens = true;
 }
 
 function singleLayer(_year, _variable, _scenario, _color) {
@@ -128,7 +153,7 @@ function singleLayer(_year, _variable, _scenario, _color) {
 	var distance = (p1.x - p2.x) / 5.55; //formula magica, ottini distanza tra punti
 	//max value
 	var maxVal = Math.sqrt(Math.abs(maxValues[_variable]));
-	//console.log(maxValues[_variable])
+	
 
 	for (var i in data) {
 
@@ -145,23 +170,11 @@ function singleLayer(_year, _variable, _scenario, _color) {
 		//draw the ellpise
 		layer.ellipse(pos.x, pos.y, size, size);
 	}
-	return layer;
+
+	return layer;//pgToImg(layer);
 }
 
 function renderProvinces() {
-	// for (var i = 0; i < province.polygons.length; i++) {
-
-	// 	console.log(province.polygons[i]);
-	// 	beginShape();
-	// 	noFill();
-	// 	stroke(0);
-	// 	strokeWeight(1);
-	// 	for (var j = 0; j < province.polygons[i][0].length; j++) {
-	// 		var pos = myMap.latLngToPixel(province.polygons[i][0][j][1], province.polygons[i][0][j][0]);
-	// 		vertex(pos.x, pos.y);
-	// 	}
-	// 	endShape();
-	// }
 
 	var layer = createGraphics(w, h);
 	layer.pixelDensity(1);
@@ -200,6 +213,76 @@ function renderProvinces() {
 	return layer;
 }
 
+function renderPolygons(_polygons) {
+
+	var layer = createGraphics(w, h);
+
+	layer.pixelDensity(1);
+	layer.noFill();
+
+	_polygons.forEach(function(poly){
+		//first, perform hittest
+		var hitTest = collidePointPoly(mouseX, mouseY, poly.polygon);
+		//change color according to the test
+		layer.stroke(hitTest == true ? 'red' : 'black');
+		//log the properties
+		if(hitTest) {
+			//console.log(poly.properties)
+		}
+		layer.beginShape();
+		//now draw the shape
+		poly.polygon.forEach(function(p){
+			layer.vertex(p.x, p.y);
+		})
+		layer.endShape();
+	});
+
+	return pgToImg(layer);
+}
+
+// from an array of geo features, return an array of polygons.
+// useful in combination with hittest
+
+function renderFeatures(_geoJson) {
+	var results = [];
+
+	var features = _geoJson.features;
+
+	features.forEach(function(feature) {
+
+		//get coordinates
+		var coords = feature.geometry.coordinates;
+
+		for (var i = 0; i < coords.length; i++) {
+
+			//Create an new object
+			var item = {}
+			item.properties = feature.properties;
+			item.polygon = [];
+			// Iterate among points
+			// For some reasons, in multi-polygons points are nested in the first item of the array.
+			// I imagine it is something related to polygons inner/outer contours.
+
+			var points = feature.geometry.type == 'MultiPolygon' ? coords[i][0] : coords[i];
+
+			for (var j = 0; j < points.length; j++) {
+				//console.log(coords[i][j]);
+
+				const latitude = points[j][1]
+				const longitude = points[j][0]
+
+				// Transform lat/lng to pixel position
+				const pos = myMap.latLngToPixel(latitude, longitude);
+				item.polygon.push(createVector(pos.x,pos.y));
+			}
+			//append to results
+			results.push(item);
+		}
+	})
+	// return thee results
+	return results;
+}
+
 function pgMask(_content,_mask){
   //Create the mask as image
   var img = createImage(_mask.width,_mask.height);
@@ -227,4 +310,19 @@ function pgMask(_content,_mask){
   contentImg.mask(img)
   // return the masked image
   return contentImg;
+}
+
+function pgToImg(_pg){
+	var outimg = createImage(_pg.width, _pg.height);
+	outimg.copy(_pg, 0, 0, _pg.width, _pg.height, 0, 0, _pg.width, _pg.height);
+	_pg.remove();
+	return outimg;
+}
+
+
+function mousePressed() {
+  // Store the current latitude and longitude of the mouse position
+  const position = myMap.latLngToPixel(0, 0);
+  //
+  console.log(position);
 }
