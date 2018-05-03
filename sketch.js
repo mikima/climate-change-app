@@ -5,18 +5,21 @@ const key = 'pk.eyJ1IjoibWlraW1hIiwiYSI6IjNvWUMwaUEifQ.Za_-O03W3UdQxZwS3bLxtg';
 
 // Options for map
 const options = {
-	lat: 43.456366,
-	lng: 11.787152,
+	lat: 42,
+	lng: 12,
 	zoom: 5.5,
-	style: 'mapbox://styles/mikima/cjfy1ltb45xo32spj8vpry2y3',
+	style: 'light-v9',
 	pitch: 0,
+	width: 960,
+	height: 960
 };
 
-let w,h;
+
 
 // Create an instance of MapboxGL
-const mappa = new Mappa('MapboxGL', key);
-let myMap;
+const mappa = new Mappa('Mapbox', key);
+const myMap = mappa.staticMap(options);
+let mapImg;
 
 let canvas;
 // datasets
@@ -42,9 +45,12 @@ var maxValues = {
 	'PR95PERC': 88
 }
 
+let w,h;
+
 function preload() {
 	fullData = loadJSON('assets/climatechange_data.json');
-	province = loadJSON('assets/contorniProvince.json')
+	province = loadJSON('assets/contorniProvince.json');
+	mapImg = loadImage(myMap.imgUrl);
 }
 
 function setup() {
@@ -52,10 +58,8 @@ function setup() {
 	h = 960;
 	canvas = createCanvas(w,h);
 	// Create a tile map and overlay the canvas on top.
-	myMap = mappa.tileMap(options);
-	myMap.overlay(canvas);
-	//add function to map zoom
-	myMap.onChange(initMap);
+	image(mapImg,0,0)
+	initMap();
 	
 }
 
@@ -87,11 +91,14 @@ function initMap() {
 	cropinverse = createGraphics(w,h);
 	//cropinverse.id('cropinverse')
 	//update
-	updateLayers()
+	updateLayers(0,0)
 }
 
-function updateLayers() {
+function updateLayers(_x,_y) {
+
+	console.log(_x,_y);
 	clear();
+	image(mapImg,0,0);
 	blendMode(MULTIPLY);
 
 	//calculate the crop area
@@ -100,7 +107,7 @@ function updateLayers() {
 	croparea.fill(0);
 	croparea.noStroke();
 	croparea.ellipseMode(CENTER);
-	croparea.ellipse(mouseX, mouseY, lens_size);
+	croparea.ellipse(_x, _y, lens_size);
 
 	//image(croparea,0,0);
 	cropinverse.pixelDensity(1);
@@ -108,7 +115,7 @@ function updateLayers() {
 	cropinverse.fill(255);
 	cropinverse.noStroke();
 	cropinverse.ellipseMode(CENTER);
-	cropinverse.ellipse(mouseX, mouseY, lens_size);
+	cropinverse.ellipse(_x, _y, lens_size);
 
 	if (show_TX30) {
 		image(pgMask(l1,croparea), 0, 0);
@@ -130,15 +137,11 @@ function updateLayers() {
 
 }
 
-function mouseMoved() {
-	updateLayers();
-}
-
 function singleLayer(_year, _variable, _scenario, _color) {
 
 	//Create a temporary layer
 	var layer = createGraphics(w, h);
-	layer.pixelDensity(1);
+	//layer.pixelDensity(1);
 
 	//load dataset
 	var data = fullData.values
@@ -177,7 +180,7 @@ function singleLayer(_year, _variable, _scenario, _color) {
 function renderProvinces() {
 
 	var layer = createGraphics(w, h);
-	layer.pixelDensity(1);
+	//layer.pixelDensity(1);
 
 	var features = province.features;
 	province.features.forEach(function(feature) {
@@ -217,7 +220,7 @@ function renderPolygons(_polygons) {
 
 	var layer = createGraphics(w, h);
 
-	layer.pixelDensity(1);
+	//layer.pixelDensity(1);
 	layer.noFill();
 
 	_polygons.forEach(function(poly){
@@ -320,9 +323,11 @@ function pgToImg(_pg){
 }
 
 
-function mousePressed() {
-  // Store the current latitude and longitude of the mouse position
-  const position = myMap.latLngToPixel(0, 0);
-  //
-  console.log(position);
+function touchMoved() {
+	console.log(touches[0])
+	updateLayers(touches[0].x,touches[0].y);
+}
+
+function touchEnded() {
+	updateLayers(0,0);
 }
