@@ -24,17 +24,24 @@ let mapImg;
 let canvas;
 // datasets
 let fullData, province;
+//size
+let w, h;
 
 //which layers
 var show_TX30 = true;
-var show_PRCPTOT = true;
+var show_PRCPTOT = false;
 var show_PR95PERC = false;
 //lens variables
 var show_lens = false;
 var lens_size = 100;
 
+// variables for graphic elements
+// single layers
+var l1, l2, l3,
+	l1_45, l2_45, l3_45
 
-
+// crop areas
+var croparea, cropinverse;
 //
 var polygons;
 
@@ -45,8 +52,6 @@ var maxValues = {
 	'PR95PERC': 88
 }
 
-let w,h;
-
 function preload() {
 	fullData = loadJSON('assets/climatechange_data.json');
 	province = loadJSON('assets/contorniProvince.json');
@@ -56,24 +61,18 @@ function preload() {
 function setup() {
 	w = 960;
 	h = 960;
-	canvas = createCanvas(w,h);
+	canvas = createCanvas(w, h);
+	pixelDensity(1);
 	// Create a tile map and overlay the canvas on top.
-	image(mapImg,0,0)
+	image(mapImg, 0, 0)
 	initMap();
-	
+
 }
 
 // The draw loop is fully functional but we are not using it for now.
 function draw() {
 	//drawDancingPoints()
 }
-
-// single layers
-var l1, l2, l3,
-	l1_45, l2_45, l3_45 
-
-// crop areas
-var croparea, cropinverse;
 
 
 function initMap() {
@@ -84,21 +83,32 @@ function initMap() {
 	l1_45 = singleLayer('2071-2100', 'TX30', 'RCP45', '#ff0086');
 	l2_45 = singleLayer('2071-2100', 'PR95PERC', 'RCP45', '#f9ff00');
 	l3_45 = singleLayer('2071-2100', 'PRCPTOT', 'RCP45', '#00fff8');
-	polygons = renderFeatures(province);
+	polygons = createPolygons(province);
 	//
-	croparea = createGraphics(w,h);
+	croparea = createGraphics(w, h);
 	//croparea.id('croparea')
-	cropinverse = createGraphics(w,h);
+	cropinverse = createGraphics(w, h);
 	//cropinverse.id('cropinverse')
 	//update
-	updateLayers(0,0)
+	updateLayers(0, 0)
 }
 
-function updateLayers(_x,_y) {
+//
+var millisCounter = new Object();
 
-	console.log(_x,_y);
+millisCounter.start = 0;
+millisCounter.verbose = true;
+millisCounter.print = function(_outtext) {
+	if (this.verbose) {
+		console.log(_outtext, millis() - this.start);
+		this.start = millis();
+	}
+}
+
+function updateLayers(_x, _y) {
+
 	clear();
-	image(mapImg,0,0);
+	image(mapImg, 0, 0);
 	blendMode(MULTIPLY);
 
 	//calculate the crop area
@@ -118,24 +128,46 @@ function updateLayers(_x,_y) {
 	cropinverse.ellipse(_x, _y, lens_size);
 
 	if (show_TX30) {
-		image(pgMask(l1,croparea), 0, 0);
-		image(pgMask(l1_45,cropinverse),0,0);
+		image(pgMask(l1, croparea), 0, 0);
+		image(pgMask(l1_45, cropinverse), 0, 0);
+		//image(drawHole(l1,mouseX,mouseY,100),0,0);
 	}
 
 	if (show_PR95PERC) {
-		image(pgMask(l2,croparea), 0, 0);
-		image(pgMask(l2_45,cropinverse),0,0);
+		image(pgMask(l2, croparea), 0, 0);
+		image(pgMask(l2_45, cropinverse), 0, 0);
 	}
 
 	if (show_PRCPTOT) {
-		image(pgMask(l3,croparea), 0, 0,w,h);
-		image(pgMask(l3_45,cropinverse),0,0);
+		image(pgMask(l3, croparea), 0, 0, w, h);
+		image(pgMask(l3_45, cropinverse), 0, 0);
 	}
 
-	//image(pgMask(renderProvinces(),cropinverse),0,0,w,h);
-	image(pgMask(renderPolygons(polygons),cropinverse),0,0)
-
+	image(pgMask(renderPolygons(polygons), cropinverse), 0, 0)
 }
+
+// function drawHole(_img, _x, _y, _radius) {
+
+// 	var img = createImage(_img.width, _img.height);
+// 	img.copy(_img, 0, 0, _img.width, _img.height, 0, 0, _img.width, _img.height);
+// 	var d = _radius * _radius;
+
+// 	img.loadPixels();
+
+// 	for (var i = 0; i < img.width; i++) {
+// 		for (var j = 0; j < img.height; j++) {
+// 			//only if 
+// 			var dx = _x - i
+// 			var dy = _y - j
+// 			if(dx*dx + dy*dy < d) {
+// 				img.set(i, j, color(0, 0, 0, 0));
+// 			}
+// 		}
+// 	}
+
+// 	img.updatePixels();
+// 	return img;
+// }
 
 function singleLayer(_year, _variable, _scenario, _color) {
 
@@ -156,7 +188,7 @@ function singleLayer(_year, _variable, _scenario, _color) {
 	var distance = (p1.x - p2.x) / 5.55; //formula magica, ottini distanza tra punti
 	//max value
 	var maxVal = Math.sqrt(Math.abs(maxValues[_variable]));
-	
+
 
 	for (var i in data) {
 
@@ -174,46 +206,7 @@ function singleLayer(_year, _variable, _scenario, _color) {
 		layer.ellipse(pos.x, pos.y, size, size);
 	}
 
-	return layer;//pgToImg(layer);
-}
-
-function renderProvinces() {
-
-	var layer = createGraphics(w, h);
-	//layer.pixelDensity(1);
-
-	var features = province.features;
-	province.features.forEach(function(feature) {
-
-		//draw polygons
-		var coords = feature.geometry.coordinates;
-		for (var i = 0; i < coords.length; i++) {
-
-			layer.beginShape();
-			layer.noFill()
-			layer.stroke('red');
-			// Iterate among points
-			// For some reasons, in multi-polygons points are nested in the first item of the array.
-			// I imagine it is something related to polygons inner/outer contours.
-
-			var points = feature.geometry.type == 'MultiPolygon' ? coords[i][0] : coords[i];
-
-			for (var j = 0; j < points.length; j++) {
-				//console.log(coords[i][j]);
-
-				const latitude = points[j][1]
-				const longitude = points[j][0]
-
-				// Transform lat/lng to pixel position
-				const pos = myMap.latLngToPixel(latitude, longitude);
-				layer.vertex(pos.x, pos.y);
-			}
-			//close path
-			layer.endShape();
-		}
-	})
-
-	return layer;
+	return layer; //pgToImg(layer);
 }
 
 function renderPolygons(_polygons) {
@@ -223,19 +216,22 @@ function renderPolygons(_polygons) {
 	//layer.pixelDensity(1);
 	layer.noFill();
 
-	_polygons.forEach(function(poly){
+	_polygons.forEach(function(poly) {
 		//first, perform hittest
 		var hitTest = collidePointPoly(mouseX, mouseY, poly.polygon);
 		//change color according to the test
-		layer.stroke(hitTest == true ? 'red' : 'black');
+		layer.strokeWeight(hitTest == true ? 2 : 0.2);
 		//log the properties
-		if(hitTest) {
+		if (hitTest) {
 			//console.log(poly.properties)
 		}
 		layer.beginShape();
 		//now draw the shape
-		poly.polygon.forEach(function(p){
-			layer.vertex(p.x, p.y);
+		var prevx = null;
+		var prevy = null;
+
+		poly.polygon.forEach(function(p) {
+			layer.vertex(Math.round(p.x), Math.round(p.y));
 		})
 		layer.endShape();
 	});
@@ -246,7 +242,7 @@ function renderPolygons(_polygons) {
 // from an array of geo features, return an array of polygons.
 // useful in combination with hittest
 
-function renderFeatures(_geoJson) {
+function createPolygons(_geoJson) {
 	var results = [];
 
 	var features = _geoJson.features;
@@ -276,7 +272,7 @@ function renderFeatures(_geoJson) {
 
 				// Transform lat/lng to pixel position
 				const pos = myMap.latLngToPixel(latitude, longitude);
-				item.polygon.push(createVector(pos.x,pos.y));
+				item.polygon.push(createVector(pos.x, pos.y));
 			}
 			//append to results
 			results.push(item);
@@ -286,48 +282,53 @@ function renderFeatures(_geoJson) {
 	return results;
 }
 
-function pgMask(_content,_mask){
-  //Create the mask as image
-  var img = createImage(_mask.width,_mask.height);
-  img.copy(_mask, 0, 0, _mask.width, _mask.height, 0, 0, _mask.width, _mask.height);
-  //load pixels
-  img.loadPixels();
-  for (var i = 0; i < img.pixels.length; i += 4) {
-    // 0 red, 1 green, 2 blue, 3 alpha
-    // Assuming that the mask image is in grayscale,
-    // the red channel is used for the alpha mask.
-    // the color is set to black (rgb => 0) and the
-    // alpha is set according to the pixel brightness.
-    var v = img.pixels[i];
-    img.pixels[i] = 0;
-    img.pixels[i+1] = 0;
-    img.pixels[i+2] = 0;
-    img.pixels[i+3] = v;
-  }
-  img.updatePixels();
-  
-  //convert _content from pg to image
-  var contentImg = createImage(_content.width,_content.height);
-  contentImg.copy(_content, 0, 0, _content.width, _content.height, 0, 0, _content.width, _content.height);
-  // create the mask
-  contentImg.mask(img)
-  // return the masked image
-  return contentImg;
+function pgMask(_content, _mask) {
+	//Create the mask as image
+	var img = createImage(_mask.width, _mask.height);
+	img.copy(_mask, 0, 0, _mask.width, _mask.height, 0, 0, _mask.width, _mask.height);
+	//load pixels
+	img.loadPixels();
+	for (var i = 0; i < img.pixels.length; i += 4) {
+		// 0 red, 1 green, 2 blue, 3 alpha
+		// Assuming that the mask image is in grayscale,
+		// the red channel is used for the alpha mask.
+		// the color is set to black (rgb => 0) and the
+		// alpha is set according to the pixel brightness.
+		var v = img.pixels[i];
+		img.pixels[i] = 0;
+		img.pixels[i + 1] = 0;
+		img.pixels[i + 2] = 0;
+		img.pixels[i + 3] = v;
+	}
+	img.updatePixels();
+
+	//convert _content from pg to image
+	var contentImg = createImage(_content.width, _content.height);
+	contentImg.copy(_content, 0, 0, _content.width, _content.height, 0, 0, _content.width, _content.height);
+	// create the mask
+	contentImg.mask(img)
+	// return the masked image
+	return contentImg;
 }
 
-function pgToImg(_pg){
+function pgToImg(_pg) {
 	var outimg = createImage(_pg.width, _pg.height);
 	outimg.copy(_pg, 0, 0, _pg.width, _pg.height, 0, 0, _pg.width, _pg.height);
 	_pg.remove();
 	return outimg;
 }
 
+function mouseMoved() {
+	//console.log(mouseX,mouseY);
+	updateLayers(mouseX, mouseY);
+}
+
 
 function touchMoved() {
 	console.log(touches[0])
-	updateLayers(touches[0].x,touches[0].y);
+	updateLayers(touches[0].x, touches[0].y);
 }
 
 function touchEnded() {
-	updateLayers(0,0);
+	updateLayers(0, 0);
 }
