@@ -77,19 +77,36 @@ function draw() {
 
 function initMap() {
 	//render all the layers
-	l1 = singleLayer('2071-2100', 'TX30', 'RCP85', '#ff0086');
-	l2 = singleLayer('2071-2100', 'PR95PERC', 'RCP85', '#f9ff00');
-	l3 = singleLayer('2071-2100', 'PRCPTOT', 'RCP85', '#00fff8');
-	l1_45 = singleLayer('2071-2100', 'TX30', 'RCP45', '#ff0086');
-	l2_45 = singleLayer('2071-2100', 'PR95PERC', 'RCP45', '#f9ff00');
-	l3_45 = singleLayer('2071-2100', 'PRCPTOT', 'RCP45', '#00fff8');
-	polygons = createPolygons(province);
-	//
-	croparea = createGraphics(w, h);
-	//croparea.id('croparea')
-	cropinverse = createGraphics(w, h);
-	//cropinverse.id('cropinverse')
-	//update
+	l1 = new GeoLayer(fullData.values, 74, myMap, w, h);
+	l1.color = '#ff0086';
+	l1.init('2071-2100', 'TX30', 'RCP85');
+	l1.draw();
+
+	l1_45 = new GeoLayer(fullData.values, 74, myMap, w, h);
+	l1_45.color = '#ff0086';
+	l1_45.init('2071-2100', 'TX30', 'RCP45');
+	l1_45.draw();
+
+	l2 = new GeoLayer(fullData.values, -410, myMap, w, h);
+	l2.color = '#00fff8';
+	l2.init('2071-2100', 'PRCPTOT', 'RCP85');
+	l2.draw();
+
+	l2_45 = new GeoLayer(fullData.values, -410, myMap, w, h);
+	l2_45.color = '#00fff8';
+	l2_45.init('2071-2100', 'PRCPTOT', 'RCP45');
+	l2_45.draw();
+
+	l3 = new GeoLayer(fullData.values, 88, myMap, w, h);
+	l3.color = '#f9ff00';
+	l3.init('2071-2100', 'PR95PERC', 'RCP85');
+	l3.draw();
+
+	l3_45 = new GeoLayer(fullData.values, 88, myMap, w, h);
+	l3_45.color = '#f9ff00';
+	l3_45.init('2071-2100', 'PR95PERC', 'RCP45');
+	l3_45.draw();
+
 	updateLayers(0, 0)
 }
 
@@ -107,67 +124,104 @@ millisCounter.print = function(_outtext) {
 
 function updateLayers(_x, _y) {
 
+	millisCounter.start = millis();
+
 	clear();
 	image(mapImg, 0, 0);
 	blendMode(MULTIPLY);
-
-	//calculate the crop area
-	croparea.pixelDensity(1);
-	croparea.background(255);
-	croparea.fill(0);
-	croparea.noStroke();
-	croparea.ellipseMode(CENTER);
-	croparea.ellipse(_x, _y, lens_size);
-
-	//image(croparea,0,0);
-	cropinverse.pixelDensity(1);
-	cropinverse.background(0);
-	cropinverse.fill(255);
-	cropinverse.noStroke();
-	cropinverse.ellipseMode(CENTER);
-	cropinverse.ellipse(_x, _y, lens_size);
-
-	if (show_TX30) {
-		image(pgMask(l1, croparea), 0, 0);
-		image(pgMask(l1_45, cropinverse), 0, 0);
-		//image(drawHole(l1,mouseX,mouseY,100),0,0);
-	}
-
-	if (show_PR95PERC) {
-		image(pgMask(l2, croparea), 0, 0);
-		image(pgMask(l2_45, cropinverse), 0, 0);
-	}
-
-	if (show_PRCPTOT) {
-		image(pgMask(l3, croparea), 0, 0, w, h);
-		image(pgMask(l3_45, cropinverse), 0, 0);
-	}
-
-	image(pgMask(renderPolygons(polygons), cropinverse), 0, 0)
+	l1_45.invertMask(_x, _y, 200);
+	l1.mask(_x, _y, 200);
+	l2_45.invertMask(_x, _y, 200);
+	l2.mask(_x, _y, 200);
+	l3_45.invertMask(_x, _y, 200);
+	l3.mask(_x, _y, 200)
+	millisCounter.print('updateLayers')
 }
 
-// function drawHole(_img, _x, _y, _radius) {
+function GeoLayer(_data, _maxval, _map, _width, _height) {
+	//
+	this.color = '#ff0000';
+	this.maxVal = _maxval;
+	this.width = _width;
+	this.height = _height;
 
-// 	var img = createImage(_img.width, _img.height);
-// 	img.copy(_img, 0, 0, _img.width, _img.height, 0, 0, _img.width, _img.height);
-// 	var d = _radius * _radius;
+	var points = [];
+	var layer = createGraphics(this.width, this.height);
+	this.rendered = createImage(this.width, this.height);
 
-// 	img.loadPixels();
+	// prepare data
+	this.init = function(_year, _variable, _scenario) {
 
-// 	for (var i = 0; i < img.width; i++) {
-// 		for (var j = 0; j < img.height; j++) {
-// 			//only if 
-// 			var dx = _x - i
-// 			var dy = _y - j
-// 			if(dx*dx + dy*dy < d) {
-// 				img.set(i, j, color(0, 0, 0, 0));
-// 			}
-// 		}
-// 	}
+		// test un po' stupidino
+		var p1 = myMap.latLngToPixel(_data[0].lat, _data[0].lon);
+		var p2 = myMap.latLngToPixel(_data[1].lat, _data[1].lon);
+		var distance = (p1.x - p2.x) / 5.55; //formula magica, ottini distanza tra punti
 
-// 	img.updatePixels();
-// 	return img;
-// }
+		var maxVal = Math.sqrt(Math.abs(this.maxVal));
+
+		_data.forEach(function(item) {
+
+			const latitude = item.lat;
+			const longitude = item.lon;
+
+			// Transform lat/lng to pixel position
+			const pos = _map.latLngToPixel(latitude, longitude);
+
+			// Get the variables
+			let size = Math.sqrt(Math.abs(item[_year][_variable][_scenario]));
+			
+			size = map(size, 0, maxVal, 0, distance);
+
+			//save the point
+			var p = {'x': pos.x,
+					'y': pos.y,
+					'size': size
+				};
+			points.push(p);
+		})
+	}
+	this.draw = function() {
+		layer.clear();
+		layer.noStroke();
+		layer.fill(this.color);
+		points.forEach(function(p){
+			layer.ellipse(p.x, p.y, p.size, p.size);
+		});
+
+		this.rendered.copy(layer, 0, 0, layer.width, layer.height, 0, 0, layer.width, layer.height);
+
+		return this.rendered;
+	}
+
+	this.mask = function(_mx,_my,_msize) {
+		layer.clear();
+		var outimg = createImage(this.width, this.height);
+		layer.image(this.rendered,0,0);
+		layer.ellipseMode(CENTER);
+		layer.noStroke();
+		layer.fill(255);
+		layer.ellipse(_mx,_my,_msize);
+		outimg.copy(layer, 0, 0, layer.width, layer.height, 0, 0, layer.width, layer.height);
+
+		image(outimg,0,0);
+
+		return outimg;
+	}
+	this.invertMask = function(_mx, _my, _msize) {
+		var outimg = createImage(_msize, _msize);
+		outimg.copy(this.rendered,_mx-_msize/2,_my-_msize/2,_msize,_msize,0,0,_msize,_msize)
+		
+		var tempMask = createGraphics(_msize, _msize);
+		tempMask.ellipseMode(CENTER);
+		tempMask.ellipse(_msize/2, _msize/2, _msize);
+		outimg.mask(tempMask);
+		tempMask.remove();
+
+		image(outimg,_mx-_msize/2,_my-_msize/2);
+		
+		return outimg;
+	}
+}
 
 function singleLayer(_year, _variable, _scenario, _color) {
 
