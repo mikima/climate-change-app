@@ -38,7 +38,8 @@ var lens_size = 100;
 // variables for graphic elements
 // single layers
 var l1, l2, l3,
-	l1_45, l2_45, l3_45
+	l1_45, l2_45, l3_45,
+	prov_layer
 
 // crop areas
 var croparea, cropinverse;
@@ -106,6 +107,9 @@ function initMap() {
 	l3_45.color = '#f9ff00';
 	l3_45.init('2071-2100', 'PR95PERC', 'RCP45');
 	l3_45.draw();
+	//_geoJson, _map, _width, _height
+	prov_layer = new ShapeFileLayer(province, myMap, w, h);
+	prov_layer.draw();
 
 	updateLayers(0, 0)
 }
@@ -135,7 +139,9 @@ function updateLayers(_x, _y) {
 	l2.mask(_x, _y, 200);
 	l3_45.invertMask(_x, _y, 200);
 	l3.mask(_x, _y, 200)
-	millisCounter.print('updateLayers')
+	prov_layer.mask(_x, _y, 200);
+	//image(prov_layer.image,0,0);
+	//millisCounter.print('updateLayers')
 }
 
 function GeoLayer(_data, _maxval, _map, _width, _height) {
@@ -221,6 +227,130 @@ function GeoLayer(_data, _maxval, _map, _width, _height) {
 		
 		return outimg;
 	}
+}
+
+function ShapeFileLayer(_geoJson, _map, _width, _height) {
+	this.data = _geoJson;
+	this.map = _map;
+	this.width = _width;
+	this.height = _height;
+
+	var shapes = [];
+	var layer = createGraphics(this.width, this.height);
+	this.image = createImage(this.width, this.height);
+
+	// Create thee polygons
+	this.createPolygons = function() {
+		var results = [];
+
+		var features = _geoJson.features;
+
+		features.forEach(function(feature) {
+
+			//get coordinates
+			var coords = feature.geometry.coordinates;
+			//Create an new object
+			var item = {}
+			item.properties = feature.properties;
+			item.polygons = [];
+
+			for (var i = 0; i < coords.length; i++) {
+
+				var poly = [];
+				// Iterate among points
+				// For some reasons, in multi-polygons points are nested in the first item of the array.
+				// I imagine it is something related to polygons inner/outer contours.
+
+				var points = feature.geometry.type == 'MultiPolygon' ? coords[i][0] : coords[i];
+
+				for (var j = 0; j < points.length; j++) {
+					//console.log(coords[i][j]);
+
+					const latitude = points[j][1]
+					const longitude = points[j][0]
+
+					// Transform lat/lng to pixel position
+					const pos = _map.latLngToPixel(latitude, longitude);
+					poly.push(createVector(pos.x, pos.y));
+				}
+				//append to polygons
+				item.polygons.push(poly);
+			}
+			//append to results
+			results.push(item);
+		})
+		// return thee results
+		shapes = results;
+	}
+
+	this.draw = function() {
+		layer.noFill();
+		layer.strokeWeight(2);
+		layer.stroke('red');
+
+		shapes.forEach(function(shape) {
+			shape.polygons.forEach(function(poly) {
+				layer.beginShape();
+				//now draw the shape
+				poly.forEach(function(p) {
+					layer.vertex(Math.round(p.x), Math.round(p.y));
+				})
+				layer.endShape();
+			})
+		});
+
+		this.image.copy(layer, 0, 0, layer.width, layer.height, 0, 0, layer.width, layer.height);
+
+		return this.image;
+	}
+	this.hitTest = function(_x, _y){
+
+		for(var shape of shapes) {
+			console.log(shape);
+			for (var poly of shape.polygons){
+				var hitTest = collidePointPoly(_x, _y, poly);
+				//if positive, draw it
+				if(hitTest == true) {
+					return shape;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	//hit test
+	this.mask = function(_mx,_my,_msize) {
+		layer.clear();
+		layer.image(this.image,0,0);
+		//perform hittest
+		var selected = this.hitTest(_mx, _my);
+		console.log(selected);
+		if(selected != null){
+			console.log(selected);
+			//draw the selected one
+			layer.noFill();
+			layer.strokeWeight(2);
+			layer.stroke(0);
+
+			selected.polygons.forEach(function(poly) {
+					layer.beginShape();
+					//now draw the shape
+					poly.forEach(function(p) {
+						layer.vertex(Math.round(p.x), Math.round(p.y));
+					})
+					layer.endShape();
+				})
+		}
+		//return as image
+		var outimg = createImage(_msize, _msize);
+		//outimg.copy(layer, _mx-_msize/2, _my-_msize/2, _msize,_msize, 0, 0, _msize,_msize);
+		image(layer,0,0);
+		return outimg;
+	}
+	//first, create polygons
+	this.createPolygons();
+	// 
 }
 
 function singleLayer(_year, _variable, _scenario, _color) {
