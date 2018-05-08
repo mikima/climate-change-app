@@ -5,10 +5,10 @@ const key = 'pk.eyJ1IjoibWlraW1hIiwiYSI6IjNvWUMwaUEifQ.Za_-O03W3UdQxZwS3bLxtg';
 
 // Options for map
 const options = {
-	lat: 43.456366,
-	lng: 11.787152,
+	lat: 42,
+	lng: 12,
 	zoom: 5.5,
-	style: 'mapbox://styles/mikima/cjfy1ltb45xo32spj8vpry2y3',
+	style: 'mapbox://styles/mikima/cjghp5xnl005z2ro5o10x4ku0',
 	pitch: 0,
 };
 
